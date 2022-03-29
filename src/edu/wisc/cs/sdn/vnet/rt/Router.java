@@ -96,87 +96,76 @@ public class Router extends Device
 
 		/********************************************************************/
 	}
-
+	
 	private void handleIpPacket(Ethernet etherPacket, Iface inIface)
 	{
 		// Make sure it's an IP packet
 		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
-		{ return; }
+		{ 	
+			System.out.println("Packet is not IPv4, drop the packet");
+			return; 
+		}
 
 		// Get IP header
-		IPv4 ipPacket = (IPv4)etherPacket.getPayload();
+		IPv4 ipPacket = (IPv4) etherPacket.getPayload();
 		System.out.println("Handle IP packet");
 
 		// Verify checksum
-		short origCksum = ipPacket.getChecksum();
+		short origCksum = ipPacket.ge:tChecksum();
 		ipPacket.resetChecksum();
 		byte[] serialized = ipPacket.serialize();
 		ipPacket.deserialize(serialized, 0, serialized.length);
 		short calcCksum = ipPacket.getChecksum();
 		if (origCksum != calcCksum)
-		{ return; }
+		{ 	System.out.println("The checksum is incorrect, drop the packet");
+			return; }
 
 		// Check TTL
 		ipPacket.setTtl((byte)(ipPacket.getTtl()-1));
 		if (0 == ipPacket.getTtl())
 		{ 
-			
+			System.out.println("TTL is 0, drop the packet.");
 			// 2.1 Time exceeded
 			
-			//TODO here ttl exceeded, should send ICMP code before
-			//dropping packet
-			
+						
 			// TODO this code is given in the assignment description
 			// When the router generates ICMP messages for time exceeded, the packet must 
 			// contain an Ethernet header, IPv4 header, ICMP header, and ICMP payload	
-
-			Ethernet ether = new Ethernet();
-			IPv4 ip = new IPv4();
-			ICMP icmp = new ICMP();
-			Data data = new Data();
-			ether.setPayload(icmp);
-			icmp.setPayload(data);		
+			//Ethernet ether = new Ethernet();
+			//IPv4 ip = new IPv4();
+			//ICMP icmp = new ICMP();
+			//Data data = new Data();
+			//ether.setPayload(icmp);
+			//icmp.setPayload(data);		
 			
 			//EtherType: set to Ethernet.TYPE_IPV4
-			ether.setEtherType(Ethernet.TYPE_IPV4);
+			//ether.setEtherType(Ethernet.TYPE_IPV4);
 
 			// Source MAC: set to the MAC address of the out interface obtained by 
 			// performing a lookup in the route table (invariably this will be the 
 			// interface on which the original packet arrived)
 			//TODO
+			//
+			IcmpMessage(etherPacket, inIface, (byte)11, (byte)0);
+			return;
+			/**
+			int srcAddr = ipPacket.getSourceAddress();
+			RouteEntry src = this.routeTable.lookup(srcAddr);
+			int n1 = src.getGatewayAddress();
+			ArpEntry arpSrc = this.arpCache.lookup(n1);
+			ether.setSourceMACAddress(arpSrc.getMac());
 
 
 			// Destination MAC: set to the MAC address of the next hop, determined by 
 			// performing a lookup in the route table followed by a lookup in the ARP cache
 			// TODO
-			
-			// IP 
-			ip.setTtl(64);
-			ip.setProtocol(IPv4.PROTOCOL_ICMP);
-
-
-			// Source IP: set to the IP address of the interface on which the original packet arrived
-			// TODO
-
-			// Destination IP — set to the source IP of the original packet
-			// TODO
-			
-			// ICMP
-			icmp.setIcmpType(11);
-			icmp.setIcmpCode(11);
-
-			// set the payload 
-			// TODO
-			byte [] bytes = {};
-			data.setData(bytes);
-
-			
-			// send to interface obtained by longest prefix match for source IP	
-			// TODO
-
-
+			int destAddr = ipPacket.getDestinationAddress();
+			RouteEntry dest = this.routeTable.lookup(destAddr);
+			int n2 = dest.getGatewayAddress();
+			ArpEntry arpDest = this.arpCache.lookup(n2);
+			ether.setDestinationMACAddress(arpDest.getMac());
 			return;
-	       
+	      		*/ 
 	
 		}
 
@@ -192,6 +181,49 @@ public class Router extends Device
 
 		// Do route lookup and forward
 		this.forwardIpPacket(etherPacket, inIface);
+	}
+
+	private void IcmpMessage(Ethernet etherPacket, Iface inIface, byte type, byte code){
+		IPv4 packet = (IPv4) etherPacket.getPayload();
+		Ethernet ether = new Ethernet();
+		ether.setEtherType(Ethernet.TYPE_IPv4);
+		ether.setSourceMACAddress(inIface.getMacAddress().toBytes());
+		ether.setDestinationMACAddress(etherPacket.getSourceMACAddress());
+
+		IPv4 ip = new IPv4();
+		ip.setTtl((byte)64);
+		ip.setProtocol(IPv4.PROTOCOL_ICMP);
+		ip.setSourceAddress(inIface.getIpAddress());
+		ip.setDestinationAddress(packet.getSourceAddress());
+
+		ICMP icmp = new ICMP();
+		icmp.setIcmpType(type);
+		icmp.setIcmpCode(code);
+
+		Data data = new Data();
+
+		if(type!=0){
+			int packetLength = packet.getHeaderLength() * 4;
+			byte[] ICMPPayload = new byte[12 + packetLength];
+			byte[] packetSerialize = packet.serialize();
+
+			for(int i = 0; i < (packetLength + 8);i++){
+				ICMPPayload[i+4]=packetSerialize[i];
+			}
+			data.setData(ICMPPayload);
+		}
+		else{
+			ICMP icmpPacket = (ICMP)packet.getPayload();
+			ip.setSourceAddress(packet.getDestinationAddress());
+			data.setData(icmpPacket.getPayload().serialize());
+		}
+
+		ether.setPayload(ip);
+		ip.setPayload(icmp);
+		icmp.setPayload(data);
+
+		this.sendPacket(ether, inIface);
+	
 	}
 
 	private void forwardIpPacket(Ethernet etherPacket, Iface inIface)
@@ -219,7 +251,8 @@ public class Router extends Device
 		// Make sure we don't sent a packet back out the interface it came in
 		Iface outIface = bestMatch.getInterface();
 		if (outIface == inIface)
-		{ return; }
+		{ 	System.out.println("Sending packet back to interface from which it came");
+			return; }
 
 		// Set source MAC address in Ethernet header
 		etherPacket.setSourceMACAddress(outIface.getMacAddress().toBytes());
