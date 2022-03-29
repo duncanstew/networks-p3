@@ -5,11 +5,7 @@ import edu.wisc.cs.sdn.vnet.DumpFile;
 import edu.wisc.cs.sdn.vnet.Iface;
 
 import net.floodlightcontroller.packet.Ethernet;
-<<<<<<< HEAD
-import net.floodlightcontroller.packet.IPv4;
-=======
 import net.floodlightcontroller.packet.*;
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 /**
  * @author Aaron Gember-Jacobson and Anubhavnidhi Abhashkumar
@@ -52,11 +48,7 @@ public class Router extends Device
 			System.exit(1);
 		}
 
-<<<<<<< HEAD
-		System.out.println("Loaded static route tabsdle!");
-=======
 		System.out.println("Loaded static route table");
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 		System.out.println("-------------------------------------------------");
 		System.out.print(this.routeTable.toString());
 		System.out.println("-------------------------------------------------");
@@ -104,17 +96,6 @@ public class Router extends Device
 
 		/********************************************************************/
 	}
-<<<<<<< HEAD
-
-	private void handleIpPacket(Ethernet etherPacket, Iface inIface)
-	{
-		// Make sure it's an IP packet
-		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
-		{ return; }
-
-		// Get IP header
-		IPv4 ipPacket = (IPv4)etherPacket.getPayload();
-=======
 	
 	private void handleIpPacket(Ethernet etherPacket, Iface inIface)
 	{
@@ -128,7 +109,6 @@ public class Router extends Device
 
 		// Get IP header
 		IPv4 ipPacket = (IPv4) etherPacket.getPayload();
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 		System.out.println("Handle IP packet");
 
 		// Verify checksum
@@ -138,38 +118,13 @@ public class Router extends Device
 		ipPacket.deserialize(serialized, 0, serialized.length);
 		short calcCksum = ipPacket.getChecksum();
 		if (origCksum != calcCksum)
-<<<<<<< HEAD
-		{ return; }
-=======
 		{ 	System.out.println("The checksum is incorrect, drop the packet");
 			return; }
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 		// Check TTL
 		ipPacket.setTtl((byte)(ipPacket.getTtl()-1));
 		if (0 == ipPacket.getTtl())
 		{ 
-<<<<<<< HEAD
-			
-			// 2.1 Time exceeded
-			
-			//TODO here ttl exceeded, should send ICMP code before
-			//dropping packet
-			
-			// TODO this code is given in the assignment description
-			// When the router generates ICMP messages for time exceeded, the packet must 
-			// contain an Ethernet header, IPv4 header, ICMP header, and ICMP payload	
-
-			Ethernet ether = new Ethernet();
-			IPv4 ip = new IPv4();
-			ICMP icmp = new ICMP();
-			Data data = new Data();
-			ether.setPayload(icmp);
-			icmp.setPayload(data);		
-			
-			//EtherType: set to Ethernet.TYPE_IPV4
-			ether.setEtherType(Ethernet.TYPE_IPV4);
-=======
 			System.out.println("TTL is 0, drop the packet.");
 			// 2.1 Time exceeded
 			
@@ -186,14 +141,11 @@ public class Router extends Device
 			
 			//EtherType: set to Ethernet.TYPE_IPV4
 			//ether.setEtherType(Ethernet.TYPE_IPV4);
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 			// Source MAC: set to the MAC address of the out interface obtained by 
 			// performing a lookup in the route table (invariably this will be the 
 			// interface on which the original packet arrived)
 			//TODO
-<<<<<<< HEAD
-=======
 			//
 			sendICMP(etherPacket, inIface, (byte)11, (byte)0);
 			return;
@@ -203,42 +155,11 @@ public class Router extends Device
 			int n1 = src.getGatewayAddress();
 			ArpEntry arpSrc = this.arpCache.lookup(n1);
 			ether.setSourceMACAddress(arpSrc.getMac());
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 
 			// Destination MAC: set to the MAC address of the next hop, determined by 
 			// performing a lookup in the route table followed by a lookup in the ARP cache
 			// TODO
-<<<<<<< HEAD
-			
-			// IP 
-			ip.setTtl(64);
-			ip.setProtocol(IPv4.PROTOCOL_ICMP);
-
-
-			// Source IP: set to the IP address of the interface on which the original packet arrived
-			// TODO
-
-			// Destination IP — set to the source IP of the original packet
-			// TODO
-			
-			// ICMP
-			icmp.setIcmpType(11);
-			icmp.setIcmpCode(11);
-
-			// set the payload 
-			// TODO
-			byte [] bytes = {};
-			data.setData(bytes);
-
-			
-			// send to interface obtained by longest prefix match for source IP	
-			// TODO
-
-
-			return;
-	       
-=======
 			int destAddr = ipPacket.getDestinationAddress();
 			RouteEntry dest = this.routeTable.lookup(destAddr);
 			int n2 = dest.getGatewayAddress();
@@ -246,16 +167,12 @@ public class Router extends Device
 			ether.setDestinationMACAddress(arpDest.getMac());
 			return;
 	      		*/ 
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 	
 		}
 
 		// Reset checksum now that TTL is decremented
 		ipPacket.resetChecksum();
-<<<<<<< HEAD
-=======
 		System.out.println("TTL decremented");
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 		// Check if packet is destined for one of router's interfaces
 		for (Iface iface : this.interfaces.values())
@@ -265,14 +182,6 @@ public class Router extends Device
 		}
 
 		// Do route lookup and forward
-<<<<<<< HEAD
-		this.forwardIpPacket(etherPacket, inIface);
-	}
-
-	private void forwardIpPacket(Ethernet etherPacket, Iface inIface)
-	{
-		// Make sure it's an IP packet
-=======
 		System.out.println("forwardingpacket");
 		this.forwardIpPacket(etherPacket, inIface);
 	}
@@ -379,7 +288,6 @@ public class Router extends Device
 	{
 		// Make sure it's an IP packet
 		System.out.println("forwardingIpPacket function call");
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
 		{ return; }
 		System.out.println("Forward IP packet");
@@ -395,24 +303,16 @@ public class Router extends Device
 		if (null == bestMatch)
 		{ 
 			// 2.2 Destination network unreachable
-<<<<<<< HEAD
-			// TODO	
-=======
 			System.out.println("Destination network unreachable");
 			sendICMP(etherPacket, inIface, (byte)3, (byte)0);	
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 			return; 
 		}
 
 		// Make sure we don't sent a packet back out the interface it came in
 		Iface outIface = bestMatch.getInterface();
 		if (outIface == inIface)
-<<<<<<< HEAD
-		{ return; }
-=======
 		{ 	System.out.println("Sending packet back to interface from which it came");
 			return; }
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 
 		// Set source MAC address in Ethernet header
 		etherPacket.setSourceMACAddress(outIface.getMacAddress().toBytes());
@@ -428,21 +328,11 @@ public class Router extends Device
 		{ 
 			// 2.3 Destination host unreachable
 			// TODO
-<<<<<<< HEAD
-
-
-
-			return; 
-		}
-		etherPacket.setDestinationMACAddress(arpEntry.getMac().toBytes());
-
-=======
 			System.out.println("sending arp requests");
 			return; 
 		}
 		etherPacket.setDestinationMACAddress(arpEntry.getMac().toBytes());
 		System.out.println("sendPacket from forwardIPpacket");
->>>>>>> 61170deedc5ba3d03e41c59e26fb5f7ec635ad4f
 		this.sendPacket(etherPacket, outIface);
 	}
 }
