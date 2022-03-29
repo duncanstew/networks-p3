@@ -5,7 +5,7 @@ import edu.wisc.cs.sdn.vnet.DumpFile;
 import edu.wisc.cs.sdn.vnet.Iface;
 
 import net.floodlightcontroller.packet.Ethernet;
-import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.*;
 
 /**
  * @author Aaron Gember-Jacobson and Anubhavnidhi Abhashkumar
@@ -100,6 +100,7 @@ public class Router extends Device
 	private void handleIpPacket(Ethernet etherPacket, Iface inIface)
 	{
 		// Make sure it's an IP packet
+		System.out.println("HandleIPPacket");
 		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
 		{ 	
 			System.out.println("Packet is not IPv4, drop the packet");
@@ -111,7 +112,7 @@ public class Router extends Device
 		System.out.println("Handle IP packet");
 
 		// Verify checksum
-		short origCksum = ipPacket.ge:tChecksum();
+		short origCksum = ipPacket.getChecksum();
 		ipPacket.resetChecksum();
 		byte[] serialized = ipPacket.serialize();
 		ipPacket.deserialize(serialized, 0, serialized.length);
@@ -146,7 +147,7 @@ public class Router extends Device
 			// interface on which the original packet arrived)
 			//TODO
 			//
-			IcmpMessage(etherPacket, inIface, (byte)11, (byte)0);
+			sendICMP(etherPacket, inIface, (byte)11, (byte)0);
 			return;
 			/**
 			int srcAddr = ipPacket.getSourceAddress();
@@ -171,6 +172,7 @@ public class Router extends Device
 
 		// Reset checksum now that TTL is decremented
 		ipPacket.resetChecksum();
+		System.out.println("TTL decremented");
 
 		// Check if packet is destined for one of router's interfaces
 		for (Iface iface : this.interfaces.values())
@@ -180,40 +182,92 @@ public class Router extends Device
 		}
 
 		// Do route lookup and forward
+		System.out.println("forwardingpacket");
 		this.forwardIpPacket(etherPacket, inIface);
 	}
 
-	private void IcmpMessage(Ethernet etherPacket, Iface inIface, byte type, byte code){
-		IPv4 packet = (IPv4) etherPacket.getPayload();
+	private void sendICMP(Ethernet etherPacket, Iface inIface, byte type, byte code)
+	{
+		System.out.println("ICMPMessage function call");
 		Ethernet ether = new Ethernet();
-		ether.setEtherType(Ethernet.TYPE_IPv4);
-		ether.setSourceMACAddress(inIface.getMacAddress().toBytes());
-		ether.setDestinationMACAddress(etherPacket.getSourceMACAddress());
-
 		IPv4 ip = new IPv4();
+		ICMP icmp = new ICMP();
+		IPv4 packet = (IPv4) etherPacket.getPayload();
+
+
+
+
+		int srcAddr = packet.getSourceAddress();
+		RouteEntry closeMatch = this.routeTable.lookup(srcAddr);
+		
+		if(closeMatch == null){
+			System.out.println("no match found, icmp");
+			return;
+		}
+
+		// TODO gateway?
+		int hop = closeMatch.getGatewayAddress();
+		if(hop == 0){
+			hop = srcAddr;			
+		}
+
+		ArpEntry arpSrc = this.arpCache.lookup(hop);
+
+		if(arpSrc == null){
+			System.out.println("icmp miss");
+			//handle arp miss here {args: etherPacket, hop, inIface);
+		}
+
+
+		//TODO check toBytes is correct
+		ether.setDestinationMACAddress(arpSrc.getMac().toBytes());
+		ether.setSourceMACAddress(inIface.getMacAddress().toBytes());
+		ether.setEtherType(Ethernet.TYPE_IPv4);
+
+
+		int destAddr = packet.getDestinationAddress();
+		RouteEntry dest = this.routeTable.lookup(destAddr);
+		int n2 = dest.getGatewayAddress();
+		ArpEntry arpDest = this.arpCache.lookup(n2);
+
+		if(arpDest == null){
+			System.out.println("arp miss");
+		}
+
+		
+		//ether.setSourceMACAddress(inIface.getMacAddress().toBytes());
+		//ether.setDestinationMACAddress(etherPacket.getSourceMACAddress());
+
 		ip.setTtl((byte)64);
 		ip.setProtocol(IPv4.PROTOCOL_ICMP);
-		ip.setSourceAddress(inIface.getIpAddress());
 		ip.setDestinationAddress(packet.getSourceAddress());
+		//ip.setSourceAddress(inIface.getIpAddress());
+		//System.out.println(inIface.getIpAddress());
 
-		ICMP icmp = new ICMP();
 		icmp.setIcmpType(type);
 		icmp.setIcmpCode(code);
 
 		Data data = new Data();
 
 		if(type!=0){
+			ip.setSourceAddress(inIface.getIpAddress());
 			int packetLength = packet.getHeaderLength() * 4;
 			byte[] ICMPPayload = new byte[12 + packetLength];
 			byte[] packetSerialize = packet.serialize();
-
+			// TODO does this include the IPv4 Header?
 			for(int i = 0; i < (packetLength + 8);i++){
 				ICMPPayload[i+4]=packetSerialize[i];
 			}
 			data.setData(ICMPPayload);
 		}
 		else{
+			// TODO does this include the IPv4 header that needs to also be added
+			// or the 4 bytes of padding?
 			ICMP icmpPacket = (ICMP)packet.getPayload();
+			// TODO i think the Source IP is supposed to be this devices ip?
+			// not necessarily the ip of where it was supposed to go
+			// because it likely didn't reach there or the packet wouldnt
+			// be dropped
 			ip.setSourceAddress(packet.getDestinationAddress());
 			data.setData(icmpPacket.getPayload().serialize());
 		}
@@ -222,13 +276,18 @@ public class Router extends Device
 		ip.setPayload(icmp);
 		icmp.setPayload(data);
 
-		this.sendPacket(ether, inIface);
+		// TODO description says send it to the  interface obtained from the longest
+		// prefix match in the route table for the original source IP, i think this
+		// can be done by using the forwardIpPacket function
+		this.forwardIpPacket(ether, inIface);
+		// this.sendPacket(ether, inIface);
 	
 	}
 
 	private void forwardIpPacket(Ethernet etherPacket, Iface inIface)
 	{
 		// Make sure it's an IP packet
+		System.out.println("forwardingIpPacket function call");
 		if (etherPacket.getEtherType() != Ethernet.TYPE_IPv4)
 		{ return; }
 		System.out.println("Forward IP packet");
@@ -244,7 +303,8 @@ public class Router extends Device
 		if (null == bestMatch)
 		{ 
 			// 2.2 Destination network unreachable
-			// TODO	
+			System.out.println("Destination network unreachable");
+			sendICMP(etherPacket, inIface, (byte)3, (byte)0);	
 			return; 
 		}
 
@@ -268,13 +328,11 @@ public class Router extends Device
 		{ 
 			// 2.3 Destination host unreachable
 			// TODO
-
-
-
+			System.out.println("sending arp requests");
 			return; 
 		}
 		etherPacket.setDestinationMACAddress(arpEntry.getMac().toBytes());
-
+		System.out.println("sendPacket from forwardIPpacket");
 		this.sendPacket(etherPacket, outIface);
 	}
 }
